@@ -8,10 +8,10 @@
   },
   "scripts": {
     "dev": "tsx --watch --watch-path server/index.ts --watch-path server/services --watch-path server/pipeline --watch-path server/detectors --watch-path server/extractors server/index.ts",
-    "start": "node dist/server/index.js",
+    "start": "tsx server/index.ts",
     "build": "vite build",
     "build:server": "tsc -p tsconfig.server.json",
-    "build:all": "npm run build && npm run build:server",
+    "build:all": "npm run build",
     "preview": "vite preview",
     "clean": "rm -rf dist",
     "lint": "tsc --noEmit",
