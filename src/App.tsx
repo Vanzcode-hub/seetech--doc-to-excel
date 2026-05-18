@@ -234,14 +234,24 @@ export default function App() {
         body: formData
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || `Upload failed: ${response.status}`);
+      const responseText = await response.text();
+      let parsedData: any = null;
+      try {
+        parsedData = JSON.parse(responseText);
+      } catch (parseErr) {
+        const isHtml = responseText.trim().startsWith("<!DOCTYPE") || responseText.trim().startsWith("<html");
+        const errMsg = isHtml 
+          ? `Server returned an HTML error (Status ${response.status}). If deployed on Vercel, please ensure VITE_API_URL is configured in your Vercel project settings to point to your Railway/Render backend.`
+          : (responseText.substring(0, 150) || `Invalid JSON response from server (Status ${response.status})`);
+        throw new Error(errMsg);
       }
 
-      const data = await response.json();
-      if (data.sheets) {
-        onProgress(data.sheets);
+      if (!response.ok) {
+        throw new Error(parsedData?.error || `Upload failed: ${response.status}`);
+      }
+
+      if (parsedData.sheets) {
+        onProgress(parsedData.sheets);
       }
     } catch (err: any) {
       console.error("Upload Error:", err);
@@ -326,13 +336,23 @@ export default function App() {
         })
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+      const responseText = await response.text();
+      let parsedData: any = null;
+      try {
+        parsedData = JSON.parse(responseText);
+      } catch (parseErr) {
+        const isHtml = responseText.trim().startsWith("<!DOCTYPE") || responseText.trim().startsWith("<html");
+        const errMsg = isHtml 
+          ? `Server returned an HTML error (Status ${response.status}). If deployed on Vercel, please ensure VITE_API_URL is configured in your Vercel settings to point to your Railway/Render backend.`
+          : (responseText.substring(0, 150) || `Invalid JSON response from server (Status ${response.status})`);
+        throw new Error(errMsg);
       }
 
-      const data = await response.json();
-      let rawText = data.choices?.[0]?.message?.content || "";
+      if (!response.ok) {
+        throw new Error(parsedData?.error?.message || parsedData?.error || `API Error: ${response.status}`);
+      }
+
+      let rawText = parsedData.choices?.[0]?.message?.content || "";
       
       const jsonMatch = rawText.match(/\{[\s\S]*\}/);
       if (jsonMatch) rawText = jsonMatch[0];
@@ -627,7 +647,7 @@ export default function App() {
                           const sheet = extractedResult.sheets[0];
                           // Always use actual row keys so OCR data is always visible
                           const rows = sheet?.rows || [];
-                          const allKeys = Array.from(new Set(rows.flatMap(r => Object.keys(r || {})))).slice(0, 8);
+                          const allKeys = Array.from(new Set<string>(rows.flatMap(r => Object.keys(r || {})))).slice(0, 8);
                           const headers = allKeys.length > 0 ? allKeys : Object.keys(rows[0] || {}).slice(0, 8);
                           
                           return headers.map((header) => (
@@ -642,7 +662,7 @@ export default function App() {
                             {extractedResult.sheets[0].rows.map((row, rIdx) => {
                               const sheet = extractedResult.sheets[0];
                               const rows = sheet?.rows || [];
-                              const allKeys = Array.from(new Set(rows.flatMap(r => Object.keys(r || {})))).slice(0, 8);
+                              const allKeys = Array.from(new Set<string>(rows.flatMap(r => Object.keys(r || {})))).slice(0, 8);
                               const headers = allKeys.length > 0 ? allKeys : Object.keys(row || {}).slice(0, 8);
                               
                               return (

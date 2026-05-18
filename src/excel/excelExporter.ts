@@ -175,7 +175,6 @@ const HEADER_TO_MASTER: Record<string, string> = {
   // Measured Power
   "measured power (kw)": "Measured Power (kW)",
   "measured kw": "Measured Power (kW)",
-  "measured kw": "Measured Power (kW)",
 
   // Measured PF
   "measured pf": "Measured PF",
