@@ -2,47 +2,53 @@
  * OpenRouter Vision Service
  * ──────────────────────────────────────────────────────────────────────────
  * Entry point for file-based extraction.
- * Handles PDF→image conversion, then delegates to the extractor router
- * which runs: detect format → route to isolated extractor → normalize output.
+ *
+ * PDF handling strategy:
+ *   - Local dev (Python available): convert PDF pages → PNG images via PyMuPDF
+ *   - Vercel / no Python: send PDF directly as base64 (Gemini supports PDF natively)
+ *
+ * Then delegates to: detect format → isolated extractor → normalized output.
  */
 
 import fs from "fs";
 import path from "path";
-import { exec } from "child_process";
-import { promisify } from "util";
 import { processAllPages } from "../extractors/extractorRouter.ts";
 
-const execAsync = promisify(exec);
-
-/**
- * Convert a PDF to PNG images using Python/PyMuPDF.
- * Returns array of { base64, mimeType } per page.
- */
-async function pdfToImages(filePath: string): Promise<{ base64: string; mimeType: string }[]> {
-  const outputDir = path.join(path.dirname(filePath), `_pdf_pages_${Date.now()}`);
-  fs.mkdirSync(outputDir, { recursive: true });
-
+/** Try to convert PDF to images using Python/PyMuPDF. Returns null if Python unavailable. */
+async function tryPdfToImagesViaPython(
+  filePath: string
+): Promise<{ base64: string; mimeType: string }[] | null> {
   try {
-    const scriptPath = path.join(process.cwd(), "pdf_to_images.py");
-    const { stdout } = await execAsync(
-      `python "${scriptPath}" "${filePath}" "${outputDir}"`,
-      { timeout: 60000 }
-    );
+    const { exec } = await import("child_process");
+    const { promisify } = await import("util");
+    const execAsync = promisify(exec);
 
-    const result = JSON.parse(stdout.trim());
-    if (!result.success || !result.images?.length) {
-      throw new Error(result.error || "PDF conversion returned no images");
-    }
+    const outputDir = path.join(path.dirname(filePath), `_pdf_pages_${Date.now()}`);
+    fs.mkdirSync(outputDir, { recursive: true });
 
-    const pages: { base64: string; mimeType: string }[] = [];
-    for (const imgPath of result.images) {
-      const buf = fs.readFileSync(imgPath);
-      pages.push({ base64: buf.toString("base64"), mimeType: "image/png" });
-      try { fs.unlinkSync(imgPath); } catch {}
+    try {
+      const scriptPath = path.join(process.cwd(), "pdf_to_images.py");
+      const { stdout } = await execAsync(
+        `python "${scriptPath}" "${filePath}" "${outputDir}"`,
+        { timeout: 60000 }
+      );
+
+      const result = JSON.parse(stdout.trim());
+      if (!result.success || !result.images?.length) return null;
+
+      const pages: { base64: string; mimeType: string }[] = [];
+      for (const imgPath of result.images) {
+        const buf = fs.readFileSync(imgPath);
+        pages.push({ base64: buf.toString("base64"), mimeType: "image/png" });
+        try { fs.unlinkSync(imgPath); } catch {}
+      }
+      return pages;
+    } finally {
+      try { fs.rmdirSync(outputDir); } catch {}
     }
-    return pages;
-  } finally {
-    try { fs.rmdirSync(outputDir); } catch {}
+  } catch {
+    // Python not available (Vercel) or script failed — fall through to direct PDF
+    return null;
   }
 }
 
@@ -63,14 +69,21 @@ export async function extractWithOpenRouter(filePath: string, _customPrompt?: st
   let pages: { base64: string; mimeType: string }[];
 
   if (isPDF) {
-    console.log(">>> [VISION] PDF detected — converting pages to images...");
-    pages = await pdfToImages(filePath);
-    console.log(`>>> [VISION] Converted ${pages.length} PDF page(s) to images.`);
+    console.log(">>> [VISION] PDF detected — trying Python conversion...");
+    const pythonPages = await tryPdfToImagesViaPython(filePath);
+
+    if (pythonPages && pythonPages.length > 0) {
+      console.log(`>>> [VISION] Python converted ${pythonPages.length} page(s) to PNG.`);
+      pages = pythonPages;
+    } else {
+      // Vercel / no Python: send PDF directly — Gemini 2.5 Flash supports PDF natively
+      console.log(">>> [VISION] Python unavailable — sending PDF directly to vision model.");
+      pages = [{ base64: fileBuffer.toString("base64"), mimeType: "application/pdf" }];
+    }
   } else {
     const mimeType = ext === ".png" ? "image/png" : "image/jpeg";
     pages = [{ base64: fileBuffer.toString("base64"), mimeType }];
   }
 
-  // Route through format detection → isolated extractors
   return processAllPages(pages, apiKey);
 }

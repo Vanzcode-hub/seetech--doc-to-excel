@@ -17,6 +17,9 @@ __pycache__/
 *.pyd
 *.egg-info/
 
+# Python folder (local dev only — requirements.txt moved here to avoid Vercel Python detection)
+# python/ is intentionally NOT ignored so requirements.txt stays in repo for reference
+
 # Uploads and temp files
 uploads/
 scratch/
