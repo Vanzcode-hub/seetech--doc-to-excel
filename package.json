@@ -3,6 +3,9 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "tsx --watch --watch-path server/index.ts --watch-path server/services --watch-path server/pipeline --watch-path server/detectors --watch-path server/extractors server/index.ts",
     "start": "node dist/server/index.js",
