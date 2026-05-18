@@ -37,7 +37,10 @@ import { ExtractedRow, ExtractedSheet, ExtractionResult } from "./types/extracti
 
 type AppStatus = "idle" | "uploading" | "extracting" | "success" | "error";
 
-// --- Constants ---
+// --- API Base URL ---
+// In production (Vercel): set VITE_API_URL to your Railway/Render backend URL
+// In local dev: empty string → uses same origin (Express serves both)
+const API_BASE = (import.meta.env.VITE_API_URL || "").replace(/\/$/, "");
 
 // --- Main Component ---
 
@@ -226,7 +229,7 @@ export default function App() {
       formData.append("file", file);
       formData.append("prompt", prompt);
 
-      const response = await fetch("/api/upload", {
+      const response = await fetch(`${API_BASE}/api/upload`, {
         method: "POST",
         body: formData
       });
@@ -256,7 +259,7 @@ export default function App() {
            Choose the most specific ID.`
         : `STRICT FORMAT MODE: Extract specifically for ${activeFormat.label}.`;
 
-      const response = await fetch("/api/extract", {
+      const response = await fetch(`${API_BASE}/api/extract`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json"
